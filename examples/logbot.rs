@@ -1,7 +1,7 @@
 extern crate discord_next as discord;
 
-use discord::model::{ChannelType, Event};
-use discord::{ChannelRef, Discord, State};
+use crate::discord::model::{ChannelType, Event};
+use crate::discord::{ChannelRef, Discord, State};
 use std::env;
 
 fn main() {

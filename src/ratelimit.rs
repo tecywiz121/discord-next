@@ -5,7 +5,7 @@ use std::sync::Mutex;
 use chrono::prelude::*;
 use hyper;
 
-use {Error, Result};
+use crate::{Error, Result};
 
 #[derive(Default)]
 pub struct RateLimits {
@@ -82,7 +82,7 @@ impl RateLimit {
             // 900ms in case "difference" is off by 1
             let delay = difference as u64 * 1000 + 900;
             warn!("pre-ratelimit: sleeping for {}ms", delay);
-            ::sleep_ms(delay);
+            crate::sleep_ms(delay);
             return;
         }
 
@@ -126,7 +126,7 @@ impl RateLimit {
             {
                 let delay = delay as u64 + 100; // 100ms of leeway
                 warn!("429: sleeping for {}ms", delay);
-                ::sleep_ms(delay);
+                crate::sleep_ms(delay);
                 return Ok(true); // retry the request
             }
         }

@@ -1,10 +1,10 @@
 extern crate discord_next as discord;
 
-use discord::model::{
+use crate::discord::model::{
     permissions, ChannelId, PermissionOverwrite, PermissionOverwriteType,
     RoleId, UserId,
 };
-use discord::Discord;
+use crate::discord::Discord;
 use std::env;
 
 fn main() {

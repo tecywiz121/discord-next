@@ -1,7 +1,7 @@
 extern crate discord_next as discord;
 
-use discord::model::Event;
-use discord::{Discord, State};
+use crate::discord::model::Event;
+use crate::discord::{Discord, State};
 use std::env;
 
 // A simple DJ bot example.

@@ -1,6 +1,6 @@
 extern crate discord_next as discord;
 
-use discord::Discord;
+use crate::discord::Discord;
 use std::env;
 
 #[allow(deprecated)]

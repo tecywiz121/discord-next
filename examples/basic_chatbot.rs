@@ -1,7 +1,7 @@
 extern crate discord_next as discord;
 
-use discord::model::Event;
-use discord::{Discord, Error};
+use crate::discord::model::Event;
+use crate::discord::{Discord, Error};
 use std::env;
 
 fn main() {

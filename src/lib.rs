@@ -74,12 +74,12 @@ mod serial;
 pub mod builders;
 pub mod model;
 
-use builders::*;
-pub use connection::Connection;
-pub use error::{Error, Result};
-use model::*;
-use ratelimit::RateLimits;
-pub use state::{ChannelRef, State};
+use crate::builders::*;
+pub use crate::connection::Connection;
+pub use crate::error::{Error, Result};
+use crate::model::*;
+use crate::ratelimit::RateLimits;
+pub use crate::state::{ChannelRef, State};
 
 const USER_AGENT: &'static str = concat!(
     "DiscordBot (https://github.com/tecywiz121/discord-next, ",
