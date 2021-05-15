@@ -56,7 +56,6 @@ pub fn deserialize_id<'d, D: Deserializer<'d>>(d: D) -> Result<u64, D::Error> {
 
 /// Deserialize a maybe-string discriminator into a u16.
 /// Also enforces 0 <= N <= 9999.
-#[allow(unused_comparisons)]
 pub fn deserialize_discrim_opt<'d, D: Deserializer<'d>>(
     d: D,
 ) -> Result<Option<u16>, D::Error> {

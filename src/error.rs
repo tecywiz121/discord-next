@@ -10,7 +10,7 @@ use std::io::Error as IoError;
 use websocket::result::WebSocketError;
 
 /// Discord API `Result` alias type.
-pub type Result<T> = ::std::result::Result<T, Error>;
+pub type Result<T, E = Error> = ::std::result::Result<T, E>;
 
 /// Discord API error type.
 #[derive(Debug)]
@@ -100,7 +100,6 @@ impl From<OpusError> for Error {
 }
 
 impl Display for Error {
-    #[allow(deprecated)]
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         match *self {
             Error::Hyper(ref inner) => inner.fmt(f),
@@ -111,35 +110,22 @@ impl Display for Error {
             #[cfg(feature = "voice")]
             Error::Opus(ref inner) => inner.fmt(f),
             Error::Command(cmd, _) => write!(f, "Command failed: {}", cmd),
-            _ => f.write_str(self.description()),
+            Error::Closed(_, _) => f.write_str("Connection closed"),
+            Error::Decode(msg, _)
+            | Error::Protocol(msg)
+            | Error::Other(msg) => f.write_str(msg),
+            Error::Status(status, _) => f.write_str(
+                status
+                    .canonical_reason()
+                    .unwrap_or("Unknown bad HTTP status"),
+            ),
+            Error::RateLimited(_) => f.write_str("Rate limited"),
         }
     }
 }
 
 impl StdError for Error {
-    #[allow(deprecated)]
-    fn description(&self) -> &str {
-        match *self {
-            Error::Hyper(ref inner) => inner.description(),
-            Error::Chrono(ref inner) => inner.description(),
-            Error::Json(ref inner) => inner.description(),
-            Error::WebSocket(ref inner) => inner.description(),
-            Error::Io(ref inner) => inner.description(),
-            #[cfg(feature = "voice")]
-            Error::Opus(ref inner) => inner.description(),
-            Error::Closed(_, _) => "Connection closed",
-            Error::Decode(msg, _)
-            | Error::Protocol(msg)
-            | Error::Other(msg) => msg,
-            Error::Status(status, _) => status
-                .canonical_reason()
-                .unwrap_or("Unknown bad HTTP status"),
-            Error::RateLimited(_) => "Rate limited",
-            Error::Command(_, _) => "Command failed",
-        }
-    }
-
-    fn cause(&self) -> Option<&dyn StdError> {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
         match *self {
             Error::Hyper(ref inner) => Some(inner),
             Error::Chrono(ref inner) => Some(inner),

@@ -25,7 +25,6 @@
 //!
 //! For examples, see the `examples` directory in the source tree.
 #![warn(missing_docs)]
-#![allow(deprecated)]
 
 extern crate base64;
 extern crate chrono;
@@ -136,134 +135,6 @@ fn tls_client() -> hyper::Client {
 }
 
 impl Discord {
-    /// Log in to the Discord Rest API and acquire a token.
-    #[deprecated(
-        note = "Login automation is not recommended. Use `from_user_token` instead."
-    )]
-    pub fn new(email: &str, password: &str) -> Result<Discord> {
-        let mut map = BTreeMap::new();
-        map.insert("email", email);
-        map.insert("password", password);
-
-        let client = tls_client();
-        let response = check_status(
-            client
-                .post(api_concat!("/auth/login"))
-                .header(hyper::header::ContentType::json())
-                .header(hyper::header::UserAgent(USER_AGENT.to_owned()))
-                .body(&serde_json::to_string(&map)?)
-                .send(),
-        )?;
-        let mut json: BTreeMap<String, String> =
-            serde_json::from_reader(response)?;
-        let token = match json.remove("token") {
-            Some(token) => token,
-            None => {
-                return Err(Error::Protocol(
-                    "Response missing \"token\" in Discord::new()",
-                ))
-            }
-        };
-        Ok(Discord {
-            rate_limits: RateLimits::default(),
-            client,
-            token,
-        })
-    }
-
-    /// Log in to the Discord Rest API, possibly using a cached login token.
-    ///
-    /// Cached login tokens are keyed to the email address and will be read from
-    /// and written to the specified path. If no cached token was found and no
-    /// password was specified, an error is returned.
-    #[deprecated(
-        note = "Login automation is not recommended. Use `from_user_token` instead."
-    )]
-    #[allow(deprecated)]
-    pub fn new_cache<P: AsRef<std::path::Path>>(
-        path: P,
-        email: &str,
-        password: Option<&str>,
-    ) -> Result<Discord> {
-        use std::fs::File;
-        use std::io::{BufRead, BufReader, Write};
-
-        // Read the cache, looking for our token
-        let path = path.as_ref();
-        let mut initial_token: Option<String> = None;
-        if let Ok(file) = File::open(path) {
-            for line in BufReader::new(file).lines() {
-                let line = line?;
-                let parts: Vec<_> = line.split('\t').collect();
-                if parts.len() == 2 && parts[0] == email {
-                    initial_token = Some(parts[1].trim().into());
-                    break;
-                }
-            }
-        }
-
-        // Perform the login
-        let discord = if let Some(ref initial_token) = initial_token {
-            let mut map = BTreeMap::new();
-            map.insert("email", email);
-            if let Some(password) = password {
-                map.insert("password", password);
-            }
-
-            let client = tls_client();
-            let response = check_status(
-                client
-                    .post(api_concat!("/auth/login"))
-                    .header(hyper::header::ContentType::json())
-                    .header(hyper::header::UserAgent(USER_AGENT.to_owned()))
-                    .header(hyper::header::Authorization(initial_token.clone()))
-                    .body(&serde_json::to_string(&map)?)
-                    .send(),
-            )?;
-            let mut json: BTreeMap<String, String> =
-                serde_json::from_reader(response)?;
-            let token = match json.remove("token") {
-                Some(token) => token,
-                None => {
-                    return Err(Error::Protocol(
-                        "Response missing \"token\" in Discord::new()",
-                    ))
-                }
-            };
-            Discord {
-                rate_limits: RateLimits::default(),
-                client,
-                token,
-            }
-        } else if let Some(password) = password {
-            Discord::new(email, password)?
-        } else {
-            return Err(Error::Other(
-                "No password was specified and no cached token was found",
-            ));
-        };
-
-        // Write the token back out, if needed
-        if initial_token.as_ref() != Some(&discord.token) {
-            let mut tokens = vec![format!("{}\t{}", email, discord.token)];
-            if let Ok(file) = File::open(path) {
-                for line in BufReader::new(file).lines() {
-                    let line = line?;
-                    if line.split('\t').next() != Some(email) {
-                        tokens.push(line);
-                    }
-                }
-            }
-            let mut file = File::create(path)?;
-            for line in tokens {
-                file.write_all(line.as_bytes())?;
-                file.write_all(&[b'\n'])?;
-            }
-        }
-
-        Ok(discord)
-    }
-
     fn from_token_raw(token: String) -> Discord {
         Discord {
             rate_limits: RateLimits::default(),
@@ -282,17 +153,6 @@ impl Discord {
     /// Log in as a user account using the given authentication token.
     pub fn from_user_token(token: &str) -> Result<Discord> {
         Ok(Discord::from_token_raw(token.trim().to_owned()))
-    }
-
-    /// Log out from the Discord API, invalidating this clients's token.
-    #[deprecated(note = "Accomplishes nothing and may fail for no reason.")]
-    pub fn logout(self) -> Result<()> {
-        let map = json! {{
-            "provider": null,
-            "token": null,
-        }};
-        let body = serde_json::to_string(&map)?;
-        check_empty(request!(self, post(body), "/auth/logout"))
     }
 
     fn request<'a, F: Fn() -> hyper::client::RequestBuilder<'a>>(
@@ -528,8 +388,8 @@ impl Discord {
     /// Requires that either the message was posted by this user, or this user
     /// has permission to manage other members' messages.
     ///
-    /// Not all fields can be edited; see the [docs] for more.
-    /// [docs]: https://discord.com/developers/docs/resources/channel#edit-message
+    /// Not all fields can be edited; see the
+    /// [Discord Documentation](https://discord.com/developers/docs/resources/channel#edit-message) for more.
     pub fn edit_message_ex<F: FnOnce(SendMessage) -> SendMessage>(
         &self,
         channel: ChannelId,
