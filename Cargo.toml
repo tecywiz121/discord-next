@@ -1,15 +1,14 @@
 [package]
-name = "discord"
-version = "0.9.0"
-authors = ["Tad Hardesty <tad@platymuus.com>"]
+name = "discord-next"
+version = "0.1.0"
+authors = ["Tad Hardesty <tad@platymuus.com>", "Sam Wilson <tecywiz121@hotmail.com>"]
 
 description = "Client library for the Discord API"
 readme = "README.md"
 license = "MIT"
 keywords = ["discord", "chat", "bot", "api", "voice"]
 
-repository = "https://github.com/SpaceManiac/discord-rs"
-documentation = "https://docs.rs/discord/0.9.0"
+repository = "https://github.com/tecywiz121/discord-next"
 
 [features]
 default = ["voice"]

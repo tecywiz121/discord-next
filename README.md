@@ -1,12 +1,7 @@
-discord-rs [![](https://meritbadge.herokuapp.com/discord)](https://crates.io/crates/discord) [![](https://img.shields.io/badge/docs-online-2020ff.svg)](https://docs.rs/discord)
+discord-next [![](https://meritbadge.herokuapp.com/discord-next)](https://crates.io/crates/discord-next) [![](https://img.shields.io/badge/docs-online-2020ff.svg)](https://docs.rs/discord-next)
 ==========
 
-> This project is only maintained occasionally. If you're having problems, open
-> a pull request or check the [network graph] for up-to-date forks.
-
-[network graph]: https://github.com/SpaceManiac/discord-rs/network
-
-**discord-rs** is a [Rust](https://www.rust-lang.org) client library for the
+**discord-next** is a [Rust](https://www.rust-lang.org) client library for the
 [Discord](https://discord.com) chat client's API.
 
 The Discord API can be divided into three main components: the RESTful API
@@ -29,15 +24,15 @@ and use `connect` to join a channel, then `play` and `stop` to control
 playback. Manipulating deaf/mute state and receiving audio are also possible.
 
 For further details, browse the [source](src/) or read
-[the documentation](https://docs.rs/discord).
+[the documentation](https://docs.rs/discord-next).
 For examples, browse the [examples](examples/) directory.
 
 ## Installation
 
-On Windows, discord-rs currently requires a GNU-like environment. For details,
+On Windows, discord-next currently requires a GNU-like environment. For details,
 read the [installation guide](https://github.com/SpaceManiac/discord-rs/wiki/Windows-Installation).
 
-On all platforms, discord-rs has several system dependencies, which should be
+On all platforms, discord-next has several system dependencies, which should be
 installed as appropriate:
 
 * `pkg-config`
