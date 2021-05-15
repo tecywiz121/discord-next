@@ -9,8 +9,6 @@ use std::net::UdpSocket;
 use std::sync::mpsc;
 
 use byteorder::{BigEndian, LittleEndian, ReadBytesExt, WriteBytesExt};
-use opus;
-use serde_json;
 use sodiumoxide::crypto::secretbox as crypto;
 use websocket::client::{Client, Sender};
 use websocket::stream::WebSocketStream;
@@ -94,9 +92,9 @@ impl VoiceConnection {
         let (tx, rx) = mpsc::channel();
         start_voice_thread(server_id, rx);
         VoiceConnection {
-            server_id: server_id,
-            user_id: user_id,
-            main_ws: main_ws,
+            server_id,
+            user_id,
+            main_ws,
             channel_id: None,
             mute: false,
             deaf: false,
@@ -255,11 +253,11 @@ impl VoiceConnection {
             }
         };
         self.thread_send(Status::Connect(ConnStartInfo {
-            server_id: server_id,
-            user_id: user_id,
-            session_id: session_id,
-            endpoint: endpoint,
-            token: token,
+            server_id,
+            user_id,
+            endpoint,
+            session_id,
+            token,
         }));
     }
 }
@@ -685,7 +683,7 @@ impl InternalConnection {
                                 Err(_) => return,
                             }
                         }
-                        if let Ok(_) = ws_reader_close.try_recv() {
+                        if ws_reader_close.try_recv().is_ok() {
                             return;
                         }
                         ::std::thread::sleep(
@@ -710,7 +708,7 @@ impl InternalConnection {
                                 Ok(()) => {}
                                 Err(_) => return,
                             }
-                        } else if let Ok(_) = udp_reader_close.try_recv() {
+                        } else if udp_reader_close.try_recv().is_ok() {
                             return;
                         }
                     }
@@ -720,16 +718,16 @@ impl InternalConnection {
 
         info!("Voice connected to {} ({})", endpoint, destination);
         Ok(InternalConnection {
-            sender: sender,
-            receive_chan: receive_chan,
+            sender,
+            receive_chan,
             ws_close: ws_sender_close,
             udp_close: udp_sender_close,
 
-            encryption_key: encryption_key,
-            udp: udp,
-            destination: destination,
+            encryption_key,
+            udp,
+            destination,
 
-            ssrc: ssrc,
+            ssrc,
             sequence: 0,
             timestamp: 0,
             speaking: false,
@@ -746,8 +744,8 @@ impl InternalConnection {
             // after 5 minutes of us sending nothing, Discord will stop sending voice data to us
             audio_keepalive_timer: crate::Timer::new(4 * 60 * 1000),
 
-            ws_thread: ws_thread,
-            udp_thread: udp_thread,
+            ws_thread,
+            udp_thread,
         })
     }
 
@@ -810,7 +808,7 @@ impl InternalConnection {
             }
         } else {
             // if there's no receiver, discard incoming events
-            while let Ok(_) = self.receive_chan.try_recv() {}
+            while self.receive_chan.try_recv().is_ok() {}
         }
 
         // Send the voice websocket keepalive if needed

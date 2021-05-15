@@ -1,33 +1,25 @@
 #[cfg(feature = "voice")]
-use std::collections::HashMap;
+mod with_voice;
+
+#[cfg(not(feature = "voice"))]
+mod without_voice;
+
 use std::sync::mpsc;
+
+#[cfg(feature = "voice")]
+use self::with_voice::Voice;
+
+#[cfg(not(feature = "voice"))]
+use self::without_voice::Voice;
 
 use websocket::client::{Client, Receiver, Sender};
 use websocket::stream::WebSocketStream;
 
-use serde_json;
-
 use crate::internal::Status;
 use crate::model::*;
-#[cfg(feature = "voice")]
-use crate::voice::VoiceConnection;
 use crate::{Error, ReceiverExt, Result, SenderExt};
 
 const GATEWAY_VERSION: u64 = 6;
-
-#[cfg(feature = "voice")]
-macro_rules! finish_connection {
-	($($name1:ident: $val1:expr),*; $($name2:ident: $val2:expr,)*) => { Connection {
-		$($name1: $val1,)*
-		$($name2: $val2,)*
-	}}
-}
-#[cfg(not(feature = "voice"))]
-macro_rules! finish_connection {
-	($($name1:ident: $val1:expr),*; $($name2:ident: $val2:expr,)*) => { Connection {
-		$($name1: $val1,)*
-	}}
-}
 
 #[derive(Clone)]
 pub struct ConnectionBuilder<'a> {
@@ -92,7 +84,7 @@ impl<'a> ConnectionBuilder<'a> {
             "op": 2,
             "d": d
         }};
-        Connection::__connect(&self.base_url, self.token.clone(), identify)
+        Connection::__connect(&self.base_url, self.token, identify)
     }
 }
 
@@ -100,15 +92,14 @@ impl<'a> ConnectionBuilder<'a> {
 pub struct Connection {
     keepalive_channel: mpsc::Sender<Status>,
     receiver: Receiver<WebSocketStream>,
-    #[cfg(feature = "voice")]
-    voice_handles: HashMap<Option<ServerId>, VoiceConnection>,
-    #[cfg(feature = "voice")]
-    user_id: UserId,
     ws_url: String,
     token: String,
     session_id: Option<String>,
     last_sequence: u64,
     identify: serde_json::Value,
+
+    #[cfg_attr(not(feature = "voice"), allow(dead_code))]
+    voice: Voice,
 }
 
 impl Connection {
@@ -207,20 +198,20 @@ impl Connection {
         }
         let session_id = ready.session_id.clone();
 
+        let voice = Voice::new(ready.user.id);
+
         // return the connection
         Ok((
-            finish_connection!(
+            Connection {
                 keepalive_channel: tx,
-                receiver: receiver,
                 ws_url: base_url.to_owned(),
                 token: token.to_owned(),
                 session_id: Some(session_id),
                 last_sequence: sequence,
-                identify: identify;
-                // voice only
-                user_id: ready.user.id,
-                voice_handles: HashMap::new(),
-            ),
+                receiver,
+                identify,
+                voice,
+            },
             ready,
         ))
     }
@@ -286,15 +277,15 @@ impl Connection {
     pub fn voice(
         &mut self,
         server_id: Option<ServerId>,
-    ) -> &mut VoiceConnection {
+    ) -> &mut crate::voice::VoiceConnection {
         let Connection {
-            ref mut voice_handles,
-            user_id,
+            ref mut voice,
             ref keepalive_channel,
             ..
         } = *self;
-        voice_handles.entry(server_id).or_insert_with(|| {
-            VoiceConnection::__new(
+        let user_id = voice.user_id;
+        voice.voice_handles.entry(server_id).or_insert_with(|| {
+            crate::voice::VoiceConnection::__new(
                 server_id,
                 user_id,
                 keepalive_channel.clone(),
@@ -310,7 +301,7 @@ impl Connection {
     /// Pass `None` to drop the connection for group and one-on-one calls.
     #[cfg(feature = "voice")]
     pub fn drop_voice(&mut self, server_id: Option<ServerId>) {
-        self.voice_handles.remove(&server_id);
+        self.voice.voice_handles.remove(&server_id);
     }
 
     /// Receive an event over the websocket, blocking until one is available.

@@ -29,8 +29,8 @@ macro_rules! warn_json {
 	($json:ident, $ty:ident $(::$ext:ident)* ( $($value:expr),*$(,)* ) ) => {
 		(Ok($ty$(::$ext)* ( $($value),* )), warn_field(stringify!($ty$(::$ext)*), $json)).0
 	};
-	($json:ident, $ty:ident $(::$ext:ident)* { $($name:ident: $value:expr),*$(,)* } ) => {
-		(Ok($ty$(::$ext)* { $($name: $value),* }), warn_field(stringify!($ty$(::$ext)*), $json)).0
+	($json:ident, $ty:ident $(::$ext:ident)* { $($name:ident$(: $value:expr)?),*$(,)* } ) => {
+		(Ok($ty$(::$ext)* { $($name$(: $value)?),* }), warn_field(stringify!($ty$(::$ext)*), $json)).0
 	};
 }
 
@@ -632,7 +632,7 @@ impl PublicChannel {
             PublicChannel {
                 id: r#try!(remove(&mut value, "id").and_then(ChannelId::decode)),
                 name: r#try!(remove(&mut value, "name").and_then(into_string)),
-                server_id: server_id,
+                server_id,
                 topic: r#try!(opt(&mut value, "topic", into_string)),
                 position: req!(r#try!(remove(&mut value, "position")).as_i64()),
                 kind: r#try!(remove(&mut value, "type").and_then(serde)),
@@ -709,7 +709,7 @@ impl PermissionOverwrite {
         warn_json!(
             value,
             PermissionOverwrite {
-                kind: kind,
+                kind,
                 allow: r#try!(
                     remove(&mut value, "allow").and_then(Permissions::decode)
                 ),
@@ -984,11 +984,11 @@ impl Invite {
             value,
             Invite {
                 code: r#try!(remove(&mut value, "code").and_then(into_string)),
-                server_id: server_id,
-                server_name: server_name,
-                channel_type: channel_type,
-                channel_id: channel_id,
-                channel_name: channel_name,
+                server_id,
+                server_name,
+                channel_type,
+                channel_id,
+                channel_name,
             }
         )
     }
@@ -1041,12 +1041,12 @@ impl RichInvite {
             RichInvite {
                 code: r#try!(remove(&mut value, "code").and_then(into_string)),
                 server_icon: server_icon_hash,
-                server_id: server_id,
-                server_name: server_name,
-                server_splash_hash: server_splash_hash,
-                channel_type: channel_type,
-                channel_id: channel_id,
-                channel_name: channel_name,
+                server_id,
+                server_name,
+                server_splash_hash,
+                channel_type,
+                channel_id,
+                channel_name,
                 inviter: r#try!(
                     remove(&mut value, "inviter").and_then(User::decode)
                 ),
@@ -1168,16 +1168,16 @@ impl Game {
     pub fn playing(name: String) -> Game {
         Game {
             kind: GameType::Playing,
-            name: name,
             url: None,
+            name,
         }
     }
 
     pub fn streaming(name: String, url: String) -> Game {
         Game {
             kind: GameType::Streaming,
-            name: name,
             url: Some(url),
+            name,
         }
     }
 
@@ -1197,7 +1197,7 @@ impl Game {
             _ => None,
         };
         warn_json!(@"Game", value, Some(Game {
-            name: name,
+            name,
             kind: kind.and_then(GameType::from_num).unwrap_or(GameType::Playing),
             url: r#try!(opt(&mut value, "url", into_string)),
         }))
@@ -1241,15 +1241,15 @@ impl Presence {
         };
 
         warn_json!(@"Presence", value, Presence {
-            user_id: user_id,
+            user_id,
             status: r#try!(remove(&mut value, "status").and_then(serde)),
             last_modified: r#try!(opt(&mut value, "last_modified", |v| Ok(req!(v.as_u64())))),
             game: match value.remove("game") {
                 None | Some(Value::Null) => None,
                 Some(val) => r#try!(Game::decode(val)),
             },
-            user: user,
             nick: r#try!(opt(&mut value, "nick", into_string)),
+            user,
             activities,
         })
     }
@@ -1371,7 +1371,7 @@ impl LiveServer {
         warn_json!(
             value,
             LiveServer {
-                id: id,
+                id,
                 name: r#try!(remove(&mut value, "name").and_then(into_string)),
                 owner_id: r#try!(
                     remove(&mut value, "owner_id").and_then(UserId::decode)
@@ -1423,11 +1423,11 @@ impl LiveServer {
                     ChannelId::decode
                 )),
                 channels: r#try!(decode_array(
-                    r#try!(get(&mut value, "channels")),
+                    r#try!(get(&value, "channels")),
                     |v| { PublicChannel::decode_server(v, id) }
                 )),
                 categories: r#try!(decode_array(
-                    r#try!(get(&mut value, "channels")),
+                    r#try!(get(&value, "channels")),
                     ChannelCategory::decode
                 )),
                 verification_level: r#try!(remove(
@@ -2048,6 +2048,7 @@ serial_decode!(Activity);
 
 /// Event received over a websocket connection
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum Event {
     /// The first event in a connection, containing the initial state.
     ///
@@ -2206,9 +2207,6 @@ pub enum Event {
 
     /// An event type not covered by the above
     Unknown(String, Object),
-    // Any other event. Should never be used directly.
-    #[doc(hidden)]
-    __Nonexhaustive,
 }
 
 impl Event {
@@ -2849,7 +2847,7 @@ impl VoiceEvent {
 // Decode helpers
 
 fn get(map: &Object, key: &str) -> Result<Value> {
-    map.get(key).map(|v| v.clone()).ok_or_else(|| {
+    map.get(key).cloned().ok_or_else(|| {
         Error::Decode("Unexpected absent key", Value::String(key.into()))
     })
 }

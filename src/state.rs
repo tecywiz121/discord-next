@@ -1,4 +1,5 @@
 use super::model::*;
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
 /// Known state composed from received events.
@@ -41,11 +42,11 @@ impl State {
             }
         }
         State {
+            servers,
+            private_channels,
+            groups,
             user: ready.user,
-            servers: servers,
             unavailable_servers: unavailable,
-            private_channels: private_channels,
-            groups: groups,
             calls: BTreeMap::new(),
             presences: ready.presences,
             relationships: ready.relationships,
@@ -60,13 +61,17 @@ impl State {
         let mut total = 0;
         for srv in &self.servers {
             let members = srv.members.len() as u64;
-            if srv.member_count > members {
-                total += srv.member_count - members;
-            } else if srv.member_count < members {
-                warn!(
-                    "Inconsistent member count for {:?}: {} < {}",
-                    srv.id, srv.member_count, members
-                );
+            match srv.member_count.cmp(&members) {
+                Ordering::Greater => {
+                    total += srv.member_count - members;
+                }
+                Ordering::Less => {
+                    warn!(
+                        "Inconsistent member count for {:?}: {} < {}",
+                        srv.id, srv.member_count, members
+                    );
+                }
+                _ => (),
             }
         }
         total
@@ -180,12 +185,12 @@ impl State {
             }
             Event::UserServerSettingsUpdate(ref settings) => {
                 if let Some(server_settings) = self.server_settings.as_mut() {
-                    server_settings
+                    if let Some(srv) = server_settings
                         .iter_mut()
                         .find(|s| s.server_id == settings.server_id)
-                        .map(|srv| {
-                            srv.clone_from(settings);
-                        });
+                    {
+                        srv.clone_from(settings);
+                    }
                 }
             }
             Event::VoiceStateUpdate(None, ref state) => {
@@ -211,26 +216,25 @@ impl State {
                 }
             }
             Event::VoiceStateUpdate(Some(server_id), ref state) => {
-                self.servers.iter_mut().find(|s| s.id == server_id).map(
-                    |srv| {
-                        if !state.channel_id.is_some() {
-                            // Remove the user from the voice state list
-                            srv.voice_states
-                                .retain(|v| v.user_id != state.user_id);
-                        } else {
-                            // Update or add to the voice state list
-                            if let Some(srv_state) = srv
-                                .voice_states
-                                .iter_mut()
-                                .find(|u| u.user_id == state.user_id)
-                            {
-                                srv_state.clone_from(state);
-                                return;
-                            }
-                            srv.voice_states.push(state.clone());
+                if let Some(srv) =
+                    self.servers.iter_mut().find(|s| s.id == server_id)
+                {
+                    if state.channel_id.is_none() {
+                        // Remove the user from the voice state list
+                        srv.voice_states.retain(|v| v.user_id != state.user_id);
+                    } else {
+                        // Update or add to the voice state list
+                        if let Some(srv_state) = srv
+                            .voice_states
+                            .iter_mut()
+                            .find(|u| u.user_id == state.user_id)
+                        {
+                            srv_state.clone_from(state);
+                            return;
                         }
-                    },
-                );
+                        srv.voice_states.push(state.clone());
+                    }
+                }
             }
             Event::CallCreate(ref call) => {
                 use std::collections::btree_map::Entry;
@@ -273,20 +277,21 @@ impl State {
                 ..
             } => {
                 if let Some(server_id) = server_id {
-                    self.servers.iter_mut().find(|s| s.id == server_id).map(
-                        |srv| {
-                            // If the user was modified, update the member list
-                            if let Some(user) = presence.user.as_ref() {
-                                srv.members
-                                    .iter_mut()
-                                    .find(|u| u.user.id == user.id)
-                                    .map(|member| {
-                                        member.user.clone_from(user);
-                                    });
+                    if let Some(srv) =
+                        self.servers.iter_mut().find(|s| s.id == server_id)
+                    {
+                        // If the user was modified, update the member list
+                        if let Some(user) = presence.user.as_ref() {
+                            if let Some(member) = srv
+                                .members
+                                .iter_mut()
+                                .find(|u| u.user.id == user.id)
+                            {
+                                member.user.clone_from(user);
                             }
-                            update_presence(&mut srv.presences, presence);
-                        },
-                    );
+                        }
+                        update_presence(&mut srv.presences, presence);
+                    }
                 } else {
                     update_presence(&mut self.presences, presence);
                 }
@@ -323,27 +328,27 @@ impl State {
                 self.servers.retain(|s| s.id != server.id);
             }
             Event::ServerUpdate(ref server) => {
-                self.servers.iter_mut().find(|s| s.id == server.id).map(
-                    |srv| {
-                        srv.name.clone_from(&server.name);
-                        srv.afk_timeout = server.afk_timeout;
-                        srv.afk_channel_id.clone_from(&server.afk_channel_id);
-                        srv.icon.clone_from(&server.icon);
-                        srv.roles.clone_from(&server.roles);
-                        srv.region.clone_from(&server.region);
-                        // embed_enabled and embed_channel_id skipped
-                        srv.owner_id.clone_from(&server.owner_id);
-                        srv.verification_level = server.verification_level;
-                    },
-                );
+                if let Some(srv) =
+                    self.servers.iter_mut().find(|s| s.id == server.id)
+                {
+                    srv.name.clone_from(&server.name);
+                    srv.afk_timeout = server.afk_timeout;
+                    srv.afk_channel_id.clone_from(&server.afk_channel_id);
+                    srv.icon.clone_from(&server.icon);
+                    srv.roles.clone_from(&server.roles);
+                    srv.region.clone_from(&server.region);
+                    // embed_enabled and embed_channel_id skipped
+                    srv.owner_id.clone_from(&server.owner_id);
+                    srv.verification_level = server.verification_level;
+                }
             }
             Event::ServerMemberAdd(ref server_id, ref member) => {
-                self.servers.iter_mut().find(|s| s.id == *server_id).map(
-                    |srv| {
-                        srv.member_count += 1;
-                        srv.members.push(member.clone());
-                    },
-                );
+                if let Some(srv) =
+                    self.servers.iter_mut().find(|s| s.id == *server_id)
+                {
+                    srv.member_count += 1;
+                    srv.members.push(member.clone());
+                }
             }
             Event::ServerMemberUpdate {
                 ref server_id,
@@ -365,19 +370,19 @@ impl State {
                 );
             }
             Event::ServerMemberRemove(ref server_id, ref user) => {
-                self.servers.iter_mut().find(|s| s.id == *server_id).map(
-                    |srv| {
-                        srv.member_count -= 1;
-                        srv.members.retain(|m| m.user.id != user.id);
-                    },
-                );
+                if let Some(srv) =
+                    self.servers.iter_mut().find(|s| s.id == *server_id)
+                {
+                    srv.member_count -= 1;
+                    srv.members.retain(|m| m.user.id != user.id);
+                }
             }
             Event::ServerMembersChunk(server_id, ref members) => {
-                self.servers.iter_mut().find(|s| s.id == server_id).map(
-                    |srv| {
-                        srv.members.extend_from_slice(members);
-                    },
-                );
+                if let Some(srv) =
+                    self.servers.iter_mut().find(|s| s.id == server_id)
+                {
+                    srv.members.extend_from_slice(members);
+                }
             }
             Event::ServerSync {
                 server_id,
@@ -385,38 +390,38 @@ impl State {
                 ref members,
                 ref presences,
             } => {
-                self.servers.iter_mut().find(|s| s.id == server_id).map(
-                    |srv| {
-                        srv.large = large;
-                        srv.members.clone_from(members);
-                        srv.presences.clone_from(presences);
-                    },
-                );
+                if let Some(srv) =
+                    self.servers.iter_mut().find(|s| s.id == server_id)
+                {
+                    srv.large = large;
+                    srv.members.clone_from(members);
+                    srv.presences.clone_from(presences);
+                }
             }
             Event::ServerRoleCreate(ref server_id, ref role) => {
-                self.servers.iter_mut().find(|s| s.id == *server_id).map(
-                    |srv| {
-                        srv.roles.push(role.clone());
-                    },
-                );
+                if let Some(srv) =
+                    self.servers.iter_mut().find(|s| s.id == *server_id)
+                {
+                    srv.roles.push(role.clone());
+                }
             }
             Event::ServerRoleUpdate(ref server_id, ref role) => {
-                self.servers.iter_mut().find(|s| s.id == *server_id).map(
-                    |srv| {
-                        srv.roles.iter_mut().find(|r| r.id == role.id).map(
-                            |srv_role| {
-                                srv_role.clone_from(role);
-                            },
-                        );
-                    },
-                );
+                if let Some(srv) =
+                    self.servers.iter_mut().find(|s| s.id == *server_id)
+                {
+                    if let Some(srv_role) =
+                        srv.roles.iter_mut().find(|r| r.id == role.id)
+                    {
+                        srv_role.clone_from(role);
+                    }
+                }
             }
             Event::ServerRoleDelete(ref server_id, ref role_id) => {
-                self.servers.iter_mut().find(|s| s.id == *server_id).map(
-                    |srv| {
-                        srv.roles.retain(|r| r.id != *role_id);
-                    },
-                );
+                if let Some(srv) =
+                    self.servers.iter_mut().find(|s| s.id == *server_id)
+                {
+                    srv.roles.retain(|r| r.id != *role_id);
+                }
             }
             Event::ChannelCreate(ref channel) => match *channel {
                 Channel::Group(ref group) => {
@@ -426,21 +431,21 @@ impl State {
                     self.private_channels.push(channel.clone());
                 }
                 Channel::Public(ref channel) => {
-                    self.servers
+                    if let Some(srv) = self
+                        .servers
                         .iter_mut()
                         .find(|s| s.id == channel.server_id)
-                        .map(|srv| {
-                            srv.channels.push(channel.clone());
-                        });
+                    {
+                        srv.channels.push(channel.clone());
+                    }
                 }
                 Channel::Category(ref channel) => {
                     if let Some(server_id) = channel.server_id {
-                        self.servers
-                            .iter_mut()
-                            .find(|s| s.id == server_id)
-                            .map(|srv| {
-                                srv.categories.push(channel.clone());
-                            });
+                        if let Some(srv) =
+                            self.servers.iter_mut().find(|s| s.id == server_id)
+                        {
+                            srv.categories.push(channel.clone());
+                        }
                     }
                 }
                 Channel::News => {}
@@ -470,12 +475,13 @@ impl State {
                     }
                 }
                 Channel::Private(ref channel) => {
-                    self.private_channels
+                    if let Some(chan) = self
+                        .private_channels
                         .iter_mut()
                         .find(|c| c.id == channel.id)
-                        .map(|chan| {
-                            chan.clone_from(channel);
-                        });
+                    {
+                        chan.clone_from(channel);
+                    }
                 }
                 Channel::Public(ref channel) => {
                     self.servers
@@ -516,21 +522,21 @@ impl State {
                     self.private_channels.retain(|c| c.id != channel.id);
                 }
                 Channel::Public(ref channel) => {
-                    self.servers
+                    if let Some(srv) = self
+                        .servers
                         .iter_mut()
                         .find(|s| s.id == channel.server_id)
-                        .map(|srv| {
-                            srv.channels.retain(|c| c.id != channel.id);
-                        });
+                    {
+                        srv.channels.retain(|c| c.id != channel.id);
+                    }
                 }
                 Channel::Category(ref channel) => {
                     if let Some(server_id) = channel.server_id {
-                        self.servers
-                            .iter_mut()
-                            .find(|s| s.id == server_id)
-                            .map(|srv| {
-                                srv.categories.retain(|c| c.id != channel.id);
-                            });
+                        if let Some(srv) =
+                            self.servers.iter_mut().find(|s| s.id == server_id)
+                        {
+                            srv.categories.retain(|c| c.id != channel.id);
+                        }
                     }
                 }
                 Channel::News => {}

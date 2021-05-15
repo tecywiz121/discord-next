@@ -1,9 +1,7 @@
-use std;
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
 use chrono::prelude::*;
-use hyper;
 
 use crate::{Error, Result};
 

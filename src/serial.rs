@@ -62,7 +62,7 @@ pub fn deserialize_discrim_opt<'d, D: Deserializer<'d>>(
 ) -> Result<Option<u16>, D::Error> {
     macro_rules! check {
         ($self:ident, $v:ident, $wrong:expr) => {
-            if $v >= 0 && $v <= 9999 {
+            if (0..=9999).contains(&$v) {
                 Ok(Some($v as u16))
             } else {
                 Err(E::invalid_value($wrong, &$self))
@@ -151,14 +151,10 @@ pub mod reaction_emoji {
         s: S,
     ) -> Result<S::Ok, S::Error> {
         (match *v {
-            ReactionEmoji::Unicode(ref name) => EmojiSer {
-                name: name,
-                id: None,
-            },
-            ReactionEmoji::Custom { ref name, id } => EmojiSer {
-                name: name,
-                id: Some(id),
-            },
+            ReactionEmoji::Unicode(ref name) => EmojiSer { name, id: None },
+            ReactionEmoji::Custom { ref name, id } => {
+                EmojiSer { name, id: Some(id) }
+            }
         })
         .serialize(s)
     }
@@ -169,7 +165,7 @@ pub mod reaction_emoji {
         Ok(match EmojiDe::deserialize(d)? {
             EmojiDe { name, id: None } => ReactionEmoji::Unicode(name),
             EmojiDe { name, id: Some(id) } => {
-                ReactionEmoji::Custom { name: name, id: id }
+                ReactionEmoji::Custom { name, id }
             }
         })
     }

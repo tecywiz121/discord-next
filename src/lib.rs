@@ -81,7 +81,7 @@ use crate::model::*;
 use crate::ratelimit::RateLimits;
 pub use crate::state::{ChannelRef, State};
 
-const USER_AGENT: &'static str = concat!(
+const USER_AGENT: &str = concat!(
     "DiscordBot (https://github.com/tecywiz121/discord-next, ",
     env!("CARGO_PKG_VERSION"),
     ")"
@@ -98,22 +98,22 @@ macro_rules! status_concat {
 }
 
 macro_rules! request {
-	($self_:ident, $method:ident($body:expr), $url:expr, $($rest:tt)*) => {{
-		let path = format!(api_concat!($url), $($rest)*);
-		$self_.request(&path, || $self_.client.$method(&path).body(&$body))?
-	}};
-	($self_:ident, $method:ident, $url:expr, $($rest:tt)*) => {{
-		let path = format!(api_concat!($url), $($rest)*);
-		$self_.request(&path, || $self_.client.$method(&path))?
-	}};
-	($self_:ident, $method:ident($body:expr), $url:expr) => {{
-		let path = api_concat!($url);
-		$self_.request(path, || $self_.client.$method(path).body(&$body))?
-	}};
-	($self_:ident, $method:ident, $url:expr) => {{
-		let path = api_concat!($url);
-		$self_.request(path, || $self_.client.$method(path))?
-	}};
+    ($self_:ident, $method:ident($body:expr), $url:expr, $($rest:tt)*) => {{
+        let path = format!(api_concat!($url), $($rest)*);
+        $self_.request(&path, || $self_.client.$method(&path).body(&$body))?
+    }};
+    ($self_:ident, $method:ident, $url:expr, $($rest:tt)*) => {{
+        let path = format!(api_concat!($url), $($rest)*);
+        $self_.request(&path, || $self_.client.$method(&path))?
+    }};
+    ($self_:ident, $method:ident($body:expr), $url:expr) => {{
+        let path = api_concat!($url);
+        $self_.request(path, || $self_.client.$method(path).body(&$body))?
+    }};
+    ($self_:ident, $method:ident, $url:expr) => {{
+        let path = api_concat!($url);
+        $self_.request(path, || $self_.client.$method(path))?
+    }};
 }
 
 /// Client for the Discord REST API.
@@ -166,8 +166,8 @@ impl Discord {
         };
         Ok(Discord {
             rate_limits: RateLimits::default(),
-            client: client,
-            token: token,
+            client,
+            token,
         })
     }
 
@@ -232,8 +232,8 @@ impl Discord {
             };
             Discord {
                 rate_limits: RateLimits::default(),
-                client: client,
-                token: token,
+                client,
+                token,
             }
         } else if let Some(password) = password {
             Discord::new(email, password)?
@@ -245,8 +245,7 @@ impl Discord {
 
         // Write the token back out, if needed
         if initial_token.as_ref() != Some(&discord.token) {
-            let mut tokens = Vec::new();
-            tokens.push(format!("{}\t{}", email, discord.token));
+            let mut tokens = vec![format!("{}\t{}", email, discord.token)];
             if let Ok(file) = File::open(path) {
                 for line in BufReader::new(file).lines() {
                     let line = line?;
@@ -269,7 +268,7 @@ impl Discord {
         Discord {
             rate_limits: RateLimits::default(),
             client: tls_client(),
-            token: token,
+            token,
         }
     }
 
@@ -614,8 +613,8 @@ impl Discord {
     ) -> Result<()> {
         // Create a Vec of the underlying u64's of the message ids, then remove
         // duplicates in it.
-        let mut ids: Vec<u64> = messages.into_iter().map(|m| m.0).collect();
-        ids.sort();
+        let mut ids: Vec<u64> = messages.iter().map(|m| m.0).collect();
+        ids.sort_unstable();
         ids.dedup();
 
         if ids.len() < 2 {
@@ -711,7 +710,7 @@ impl Discord {
                 &http_buffer.boundary,
             )));
         let mut request = request.start()?;
-        request.write(&http_buffer.buf[..])?;
+        request.write_all(&http_buffer.buf[..])?;
         Message::decode(serde_json::from_reader(check_status(request.send())?)?)
     }
 
@@ -757,10 +756,10 @@ impl Discord {
     /// // Assuming that a `Discord` instance, role, and channel have already
     /// // been defined previously.
     /// let target = PermissionOverwrite {
-    ///	    kind: PermissionOverwriteType::Role(role.id),
-    ///	    allow: permissions::VOICE_CONNECT | permissions::VOICE_SPEAK,
-    ///	    deny: permissions::VOICE_MUTE_MEMBERS | permissions::VOICE_MOVE_MEMBERS,
-    ///	};
+    ///     kind: PermissionOverwriteType::Role(role.id),
+    ///     allow: permissions::VOICE_CONNECT | permissions::VOICE_SPEAK,
+    ///     deny: permissions::VOICE_MUTE_MEMBERS | permissions::VOICE_MOVE_MEMBERS,
+    /// };
     /// let result = discord.create_permission(channel.id, target);
     /// ```
     pub fn create_permission(
@@ -899,7 +898,7 @@ impl Discord {
     /// use discord::model::ReactionEmoji;
     ///
     /// let _ = discord.delete_reaction(&channel.id, message.id, None, ReactionEmoji::Custom {
-    ///	    name: "ThisIsFine",
+    ///     name: "ThisIsFine",
     ///     id: EmojiId(1234)
     /// });
     /// ```
@@ -1752,12 +1751,12 @@ fn check_empty(mut response: hyper::client::Response) -> Result<()> {
 }
 
 fn resolve_invite(invite: &str) -> &str {
-    if invite.starts_with("http://discord.gg/") {
-        &invite[18..]
-    } else if invite.starts_with("https://discord.gg/") {
-        &invite[19..]
-    } else if invite.starts_with("discord.gg/") {
-        &invite[11..]
+    if let Some(stripped) = invite.strip_prefix("http://discord.gg/") {
+        stripped
+    } else if let Some(stripped) = invite.strip_prefix("https://discord.gg/") {
+        stripped
+    } else if let Some(stripped) = invite.strip_prefix("discord.gg/") {
+        stripped
     } else {
         invite
     }
@@ -1779,7 +1778,7 @@ impl Timer {
         let tick_len = time::Duration::from_millis(tick_len_ms);
         Timer {
             next_tick_at: time::Instant::now() + tick_len,
-            tick_len: tick_len,
+            tick_len,
         }
     }
 
@@ -1794,7 +1793,7 @@ impl Timer {
 
     fn check_tick(&mut self) -> bool {
         if time::Instant::now() >= self.next_tick_at {
-            self.next_tick_at = self.next_tick_at + self.tick_len;
+            self.next_tick_at += self.tick_len;
             true
         } else {
             false
@@ -1806,7 +1805,7 @@ impl Timer {
         if self.next_tick_at > now {
             std::thread::sleep(self.next_tick_at - now);
         }
-        self.next_tick_at = self.next_tick_at + self.tick_len;
+        self.next_tick_at += self.tick_len;
     }
 }
 
