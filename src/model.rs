@@ -103,6 +103,14 @@ macro_rules! id {
 			#[derive(Serialize, Deserialize)]
 			pub struct $name(#[serde(deserialize_with = "crate::serial::deserialize_id")] pub u64);
 
+			impl FromStr for $name {
+                type Err = std::num::ParseIntError;
+
+                fn from_str(txt: &str) -> Result<Self, Self::Err> {
+                    txt.parse().map(Self)
+                }
+            }
+
 			impl $name {
 				#[inline]
 				#[allow(dead_code)]
