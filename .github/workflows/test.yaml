@@ -20,6 +20,10 @@ jobs:
   test:
     name: Test Suite
     runs-on: ubuntu-latest
+    env:
+      DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+      DISCORD_SERVER_ID: ${{ secrets.DISCORD_SERVER_ID }}
+      DISCORD_TEXT_CHANNEL_ID: ${{ secrets.DISCORD_TEXT_CHANNEL_ID }}
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
